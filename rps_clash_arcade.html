@@ -1,0 +1,2040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RPS Clash - Arcade Bubble Brawl</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+    .font-game {
+      font-family: 'Fredoka One', cursive, sans-serif;
+    }
+    canvas {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+    .pulse-danger {
+      animation: pulseGlow 1s ease-in-out infinite;
+    }
+    .arcade-shadow {
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-white w-screen h-screen relative select-none">
+
+  <!-- Main Fullscreen Game Canvas -->
+  <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block z-0"></canvas>
+
+  <!-- Top Heads-Up Display (HUD) -->
+  <header class="absolute top-0 left-0 right-0 z-20 p-2 sm:p-4 flex justify-between items-start pointer-events-none">
+    
+    <!-- Left HUD: Score & High Score -->
+    <div class="flex flex-col gap-1.5 pointer-events-none">
+      <div class="glass-panel px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2 sm:gap-3 shadow-lg border border-slate-700/60 pointer-events-auto">
+        <div>
+          <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold block">Score</span>
+          <span id="scoreDisplay" class="font-game text-xl sm:text-3xl font-extrabold text-amber-400">0</span>
+        </div>
+        <div class="h-7 w-[1px] bg-slate-700/80 mx-0.5 sm:mx-1"></div>
+        <div>
+          <span class="text-[10px] sm:text-xs uppercase tracking-wider text-slate-400 font-bold block">Best</span>
+          <span id="highScoreDisplay" class="font-game text-base sm:text-xl font-bold text-slate-200">0</span>
+        </div>
+      </div>
+
+      <!-- Combo Multiplier Badge -->
+      <div id="comboBadge" class="hidden glass-panel px-3 py-1 rounded-xl w-fit items-center gap-2 border-emerald-500/40 bg-emerald-950/40 text-emerald-300 font-bold text-sm tracking-wide transition-all transform animate-bounce pointer-events-auto">
+        <span>⚡ Combo <span id="comboMultiplierText">x2</span>!</span>
+      </div>
+      <!-- Mode & Tier Indicator Badge -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <div id="modeBadge" class="glass-panel px-2.5 py-0.5 rounded-lg w-fit text-[11px] font-black tracking-wide border-amber-500/50 bg-amber-950/40 text-amber-300">
+          ⚡ ARCADE
+        </div>
+        <div id="timerBadge" class="hidden glass-panel px-2.5 py-0.5 rounded-lg w-fit text-[11px] font-black tracking-wide border-sky-500/50 bg-sky-950/40 text-sky-300">
+          ⏱️ <span id="timerText">0:00</span>
+        </div>
+        <div id="hpTierBadge" class="hidden glass-panel px-2.5 py-0.5 rounded-lg w-fit text-[11px] font-black tracking-wide border-purple-500/50 bg-purple-950/40 text-purple-300">
+          🛡️ <span id="hpTierText">HP RAMP</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center HUD: Pressure / Ball Cap Meter -->
+    <div class="flex flex-col items-center pointer-events-none max-w-[140px] sm:max-w-[220px] w-full mx-1 sm:mx-2">
+      <div class="glass-panel px-2.5 sm:px-3 py-1.5 rounded-2xl w-full border border-slate-700/60 shadow-lg flex flex-col items-center pointer-events-auto">
+        <div class="flex justify-between w-full text-[10px] sm:text-xs font-bold mb-1 px-0.5 truncate">
+          <span class="text-slate-300 flex items-center gap-1 truncate">
+            <span class="inline-block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-cyan-400"></span> BALLS
+          </span>
+          <span id="ballCounter" class="text-cyan-300 truncate">0 / 42</span>
+        </div>
+        <div class="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden p-0.5 border border-slate-700">
+          <div id="pressureBar" class="h-full rounded-full transition-all duration-300 bg-gradient-to-r from-emerald-400 via-yellow-400 to-rose-500 w-0"></div>
+        </div>
+      </div>
+      <div id="dangerWarning" class="hidden text-[10px] font-black uppercase text-rose-400 mt-1 pulse-danger tracking-wider">
+        ⚠️ OVERFLOW!
+      </div>
+    </div>
+
+    <!-- Right HUD: Audio & Pause Controls -->
+    <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-none">
+      <button id="btnSound" class="glass-panel w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-sm sm:text-lg active:scale-95 transition-transform hover:bg-slate-800 border-slate-700/80 shadow-md pointer-events-auto" title="Toggle Sound">
+        🔊
+      </button>
+      <button id="btnPause" class="glass-panel w-9 h-9 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-sm sm:text-lg active:scale-95 transition-transform hover:bg-slate-800 border-slate-700/80 shadow-md pointer-events-auto" title="Pause Game">
+        ⏸️
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom Rules Quick Cheatsheet (Circular Elemental Icons) -->
+  <footer class="absolute bottom-3 left-0 right-0 z-10 pointer-events-none flex justify-center px-4">
+    <div class="glass-panel px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 flex items-center gap-2 sm:gap-3 shadow-lg border border-slate-800 pointer-events-auto">
+      <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold hidden sm:inline">Rules:</span>
+      <div class="flex items-center gap-1.5" title="Water beats Fire">
+        <span class="w-6 h-6 rounded-full bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-xs">💧</span>
+        <span class="text-slate-500 text-[10px]">&gt;</span>
+        <span class="w-6 h-6 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-xs">🔥</span>
+      </div>
+      <span class="text-slate-700">•</span>
+      <div class="flex items-center gap-1.5" title="Fire beats Plant">
+        <span class="w-6 h-6 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-xs">🔥</span>
+        <span class="text-slate-500 text-[10px]">&gt;</span>
+        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xs">🌿</span>
+      </div>
+      <span class="text-slate-700">•</span>
+      <div class="flex items-center gap-1.5" title="Plant beats Water">
+        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xs">🌿</span>
+        <span class="text-slate-500 text-[10px]">&gt;</span>
+        <span class="w-6 h-6 rounded-full bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-xs">💧</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Start / Intro Screen Modal -->
+  <div id="startModal" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/90">
+    <div class="glass-panel max-w-md w-full p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-2xl text-center flex flex-col items-center">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 via-rose-500 to-emerald-500 flex items-center justify-center text-3xl shadow-lg mb-4">
+        ⚔️
+      </div>
+      <h1 class="font-game text-3xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-rose-400 to-emerald-400 mb-2">
+        RPS CLASH
+      </h1>
+      <p class="text-slate-300 text-sm leading-relaxed mb-5">
+        A new elemental ball spawns every second. <span class="text-amber-400 font-semibold">Click &amp; drag</span> any ball onto another to clash using the classic elemental triangle!
+      </p>
+
+      <div class="grid grid-cols-3 gap-2 w-full mb-6">
+        <div class="p-2.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex flex-col items-center">
+          <span class="text-2xl mb-1">💧</span>
+          <span class="font-bold text-xs text-sky-400">Water</span>
+          <span class="text-[10px] text-slate-400">Douses 🔥 Fire</span>
+        </div>
+        <div class="p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col items-center">
+          <span class="text-2xl mb-1">🔥</span>
+          <span class="font-bold text-xs text-rose-400">Fire</span>
+          <span class="text-[10px] text-slate-400">Burns 🌿 Plant</span>
+        </div>
+        <div class="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col items-center">
+          <span class="text-2xl mb-1">🌿</span>
+          <span class="font-bold text-xs text-emerald-400">Plant</span>
+          <span class="text-[10px] text-slate-400">Absorbs 💧 Water</span>
+        </div>
+      </div>
+
+      <div class="w-full bg-slate-900/70 p-3 rounded-2xl text-xs text-slate-300 mb-6 text-left border border-slate-800">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-emerald-400 font-bold">Win Clash:</span>
+          <span>Deal DMG equal to your ball's HP/Lv! Winner also heals +1 HP.</span>
+        </div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-purple-400 font-bold">Level System:</span>
+          <span>Higher HP balls strike with multi-damage and unlock at 25+ score!</span>
+        </div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-rose-400 font-bold">Lose Clash:</span>
+          <span>Dragged ball takes opponent's full attack damage!</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-amber-400 font-bold">2 Modes:</span>
+          <span>Play intense ~60s <b>Arcade Blitz</b> or stress-free <b>Endless Chill</b>!</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+        <button id="btnStartArcade" class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-rose-500 to-pink-600 hover:opacity-90 active:scale-95 transition-all text-white shadow-xl shadow-rose-950/40 flex flex-col items-center justify-center border border-amber-300/30">
+          <span class="font-game text-lg sm:text-xl tracking-wider uppercase flex items-center gap-1.5">⚡ Arcade</span>
+          <span class="text-[11px] text-amber-100 font-semibold opacity-90">Fast ~1m Survival Blitz</span>
+        </button>
+        <button id="btnStartEndless" class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 via-teal-500 to-emerald-500 hover:opacity-90 active:scale-95 transition-all text-white shadow-xl shadow-sky-950/40 flex flex-col items-center justify-center border border-sky-300/30">
+          <span class="font-game text-lg sm:text-xl tracking-wider uppercase flex items-center gap-1.5">🌊 Endless</span>
+          <span class="text-[11px] text-sky-100 font-semibold opacity-90">Chill Popping • No Game Over</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Overlay Modal -->
+  <div id="pauseModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/90">
+    <div class="glass-panel max-w-xs w-full p-6 rounded-3xl border border-slate-700 shadow-2xl text-center">
+      <h2 class="font-game text-3xl text-amber-300 mb-4">GAME PAUSED</h2>
+      <div class="flex flex-col gap-3">
+        <button id="btnResume" class="w-full py-3 rounded-2xl font-game text-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition-all text-white shadow-lg">
+          Resume
+        </button>
+        <button id="btnRestartFromPause" class="w-full py-3 rounded-2xl font-game text-lg bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-slate-200">
+          Restart Current Mode
+        </button>
+        <button id="btnSwitchModeFromPause" class="w-full py-2.5 rounded-2xl font-bold text-sm bg-slate-900/90 hover:bg-slate-800 active:scale-95 transition-all text-slate-300 border border-slate-700">
+          Change Mode
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div id="gameOverModal" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/92">
+    <div class="glass-panel max-w-sm w-full p-6 sm:p-8 rounded-3xl border border-rose-500/30 shadow-2xl text-center flex flex-col items-center">
+      <div class="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mb-3 border border-rose-500/40">
+        💥
+      </div>
+      <h2 class="font-game text-3xl text-rose-400 mb-1">BALL OVERFLOW!</h2>
+      <p id="gameOverSubtitle" class="text-slate-400 text-xs sm:text-sm mb-5">You survived 0:00 in Arcade Blitz!</p>
+
+      <div class="w-full bg-slate-900/80 rounded-2xl p-4 mb-6 border border-slate-800 flex justify-around">
+        <div>
+          <span class="text-xs uppercase text-slate-400 font-bold block mb-1">Final Score</span>
+          <span id="finalScoreDisplay" class="font-game text-3xl text-amber-400 font-extrabold">0</span>
+        </div>
+        <div class="w-[1px] bg-slate-800"></div>
+        <div>
+          <span class="text-xs uppercase text-slate-400 font-bold block mb-1">Best Score</span>
+          <span id="bestScoreDisplay" class="font-game text-3xl text-cyan-400 font-extrabold">0</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2.5 w-full">
+        <button id="btnRestartGame" class="w-full py-3.5 px-6 rounded-2xl font-game text-xl tracking-wider uppercase bg-gradient-to-r from-amber-500 via-rose-500 to-pink-600 hover:opacity-90 active:scale-95 transition-all text-white shadow-xl shadow-rose-950/50">
+          Play Arcade Again
+        </button>
+        <button id="btnSwitchToEndless" class="w-full py-2.5 px-6 rounded-2xl font-bold text-sm bg-slate-800/90 hover:bg-slate-700 active:scale-95 transition-all text-sky-300 border border-sky-500/30">
+          🌊 Switch to Endless Chill
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Logic Script -->
+  <script>
+    // --- Audio System (Web Audio API Synthesizer) ---
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playSpawn() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(520, now + 0.12);
+
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+
+      playGrab() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(360, now);
+        osc.frequency.exponentialRampToValueAtTime(640, now + 0.07);
+
+        gain.gain.setValueAtTime(0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.07);
+      }
+
+      playDamageHit() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      }
+
+      playHeavyImpact() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(135, now);
+        osc.frequency.exponentialRampToValueAtTime(42, now + 0.24);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.24);
+      }
+
+      playHeal() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.15); // G5
+
+        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
+
+      playWin(combo = 1) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const root = 440 + Math.min(combo * 60, 360);
+        
+        [root, root * 1.25, root * 1.5].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const start = now + idx * 0.05;
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, start);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.2, start + 0.15);
+
+          gain.gain.setValueAtTime(0.12, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.18);
+        });
+      }
+
+      playLoss() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.linearRampToValueAtTime(110, now + 0.22);
+
+        gain.gain.setValueAtTime(0.13, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      }
+
+      playDraw() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(280, now + 0.15);
+
+        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
+
+      playGameOver() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.6);
+
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    // --- Configuration & Constants ---
+    const BASE_MAX_BALLS = 42;
+    const HARD_CAP_BALLS = 48; // Safe mobile 60fps swarm cap
+    const BASE_SPAWN_INTERVAL = 1000; // 1 second base
+    const MIN_SPAWN_INTERVAL = 580;   // Balanced swarm pace so titans can clear the field
+    const BASE_BALL_RADIUS = 30;
+    const MAX_BALL_RADIUS = 82;
+    const MAX_SPEED = 2.8;
+    const MAX_PARTICLES = 40;
+
+    // Elemental rock-paper-scissors mapping (Water > Fire > Plant > Water)
+    const TYPES = {
+      WATER: {
+        id: 'water',
+        name: 'WATER',
+        label: '💧 WATER',
+        baseColor: '#0284c7',
+        midColor: '#0ea5e9',
+        lightColor: '#38bdf8',
+        ringColor: '#7dd3fc',
+        auraColor: 'rgba(56, 189, 248, 0.22)'
+      },
+      FIRE: {
+        id: 'fire',
+        name: 'FIRE',
+        label: '🔥 FIRE',
+        baseColor: '#dc2626',
+        midColor: '#ef4444',
+        lightColor: '#fb923c',
+        ringColor: '#fca5a5',
+        auraColor: 'rgba(251, 146, 60, 0.22)'
+      },
+      PLANT: {
+        id: 'plant',
+        name: 'PLANT',
+        label: '🌿 PLANT',
+        baseColor: '#15803d',
+        midColor: '#16a34a',
+        lightColor: '#4ade80',
+        ringColor: '#86efac',
+        auraColor: 'rgba(74, 222, 128, 0.22)'
+      }
+    };
+    const TYPE_KEYS = [TYPES.WATER, TYPES.FIRE, TYPES.PLANT];
+
+    // --- Expressive Elemental Character Renderer ---
+    function drawElementalCharacter(ctx, ball, r) {
+      const typeId = ball.type.id;
+      const isHurt = ball.hitFlashTimer > 0 || ball.stunnedTimer > 0;
+      const isDragged = ball.isBeingDragged;
+      const isTitan = ball.hp >= 4;
+
+      ctx.save();
+
+      // 1. Elemental Crown / Headpiece (sits cleanly on top of the character)
+      if (typeId === 'water') {
+        // Cute Aqua Fin / Droplet Tuft + Rosy Cheeks
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 1.28);
+        ctx.bezierCurveTo(r * 0.28, -r * 1.0, r * 0.22, -r * 0.78, 0, -r * 0.82);
+        ctx.bezierCurveTo(-r * 0.22, -r * 0.78, -r * 0.28, -r * 1.0, 0, -r * 1.28);
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        // Side bubble cheeks
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.55)';
+        ctx.beginPath();
+        ctx.arc(-r * 0.46, r * 0.14, r * 0.12, 0, Math.PI * 2);
+        ctx.arc(r * 0.46, r * 0.14, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (typeId === 'fire') {
+        // Blazing triple flame hair crest
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.35, -r * 0.82);
+        ctx.quadraticCurveTo(-r * 0.42, -r * 1.15, -r * 0.14, -r * 1.0);
+        ctx.quadraticCurveTo(0, -r * 1.38, r * 0.14, -r * 1.0);
+        ctx.quadraticCurveTo(r * 0.42, -r * 1.15, r * 0.35, -r * 0.82);
+        ctx.closePath();
+        ctx.fillStyle = '#fde047';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff7ed';
+        ctx.stroke();
+
+        // Warm ember cheeks
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.45)';
+        ctx.beginPath();
+        ctx.arc(-r * 0.46, r * 0.14, r * 0.11, 0, Math.PI * 2);
+        ctx.arc(r * 0.46, r * 0.14, r * 0.11, 0, Math.PI * 2);
+        ctx.fill();
+
+      } else if (typeId === 'plant') {
+        // Twin Leaf Sprout on top of head
+        ctx.strokeStyle = '#bbf7d0';
+        ctx.lineWidth = Math.max(2, r * 0.08);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.85);
+        ctx.lineTo(0, -r * 1.08);
+        ctx.stroke();
+
+        // Left & Right sprout leaves
+        ctx.fillStyle = '#86efac';
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.18, -r * 1.12, r * 0.2, r * 0.1, -0.35, 0, Math.PI * 2);
+        ctx.ellipse(r * 0.18, -r * 1.12, r * 0.2, r * 0.1, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Rosy nature cheeks
+        ctx.fillStyle = 'rgba(253, 164, 175, 0.5)';
+        ctx.beginPath();
+        ctx.arc(-r * 0.46, r * 0.14, r * 0.12, 0, Math.PI * 2);
+        ctx.arc(r * 0.46, r * 0.14, r * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 2. Expressive Eyes
+      const eyeOffsetX = r * 0.31;
+      const eyeOffsetY = -r * 0.08;
+      const eyeRadius = Math.max(3.5, r * 0.16);
+
+      // Slight gaze tracking in movement direction
+      const lookX = Math.max(-1, Math.min(1, ball.vx * 0.35)) * (eyeRadius * 0.28);
+      const lookY = Math.max(-1, Math.min(1, ball.vy * 0.35)) * (eyeRadius * 0.28);
+
+      if (isHurt) {
+        // Wincing "> <" eyes when taking a hit or stunned
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = Math.max(2.2, r * 0.09);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Left ">"
+        ctx.beginPath();
+        ctx.moveTo(-eyeOffsetX - eyeRadius * 0.6, eyeOffsetY - eyeRadius * 0.5);
+        ctx.lineTo(-eyeOffsetX + eyeRadius * 0.5, eyeOffsetY);
+        ctx.lineTo(-eyeOffsetX - eyeRadius * 0.6, eyeOffsetY + eyeRadius * 0.5);
+        ctx.stroke();
+
+        // Right "<"
+        ctx.beginPath();
+        ctx.moveTo(eyeOffsetX + eyeRadius * 0.6, eyeOffsetY - eyeRadius * 0.5);
+        ctx.lineTo(eyeOffsetX - eyeRadius * 0.5, eyeOffsetY);
+        ctx.lineTo(eyeOffsetX + eyeRadius * 0.6, eyeOffsetY + eyeRadius * 0.5);
+        ctx.stroke();
+      } else {
+        // Crisp dark eyes with bright catchlights
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(-eyeOffsetX + lookX, eyeOffsetY + lookY, eyeRadius, 0, Math.PI * 2);
+        ctx.arc(eyeOffsetX + lookX, eyeOffsetY + lookY, eyeRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // White eye shine
+        ctx.fillStyle = '#ffffff';
+        const shineR = eyeRadius * 0.42;
+        ctx.beginPath();
+        ctx.arc(-eyeOffsetX + lookX - eyeRadius * 0.28, eyeOffsetY + lookY - eyeRadius * 0.28, shineR, 0, Math.PI * 2);
+        ctx.arc(eyeOffsetX + lookX - eyeRadius * 0.28, eyeOffsetY + lookY - eyeRadius * 0.28, shineR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fierce eyebrows for Fire or High-Level Titans
+        if (typeId === 'fire' || isTitan) {
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = Math.max(2, r * 0.08);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-eyeOffsetX - eyeRadius * 0.8, eyeOffsetY - eyeRadius * 1.25);
+          ctx.lineTo(-eyeOffsetX + eyeRadius * 0.7, eyeOffsetY - eyeRadius * 0.85);
+          ctx.moveTo(eyeOffsetX + eyeRadius * 0.8, eyeOffsetY - eyeRadius * 1.25);
+          ctx.lineTo(eyeOffsetX - eyeRadius * 0.7, eyeOffsetY - eyeRadius * 0.85);
+          ctx.stroke();
+        }
+      }
+
+      // 3. Expressive Mouth
+      const mouthY = r * 0.22;
+      ctx.strokeStyle = '#0f172a';
+      ctx.fillStyle = '#0f172a';
+      ctx.lineWidth = Math.max(2, r * 0.08);
+      ctx.lineCap = 'round';
+
+      if (isHurt) {
+        // Wavy / grimace mouth
+        ctx.beginPath();
+        ctx.arc(0, mouthY + r * 0.08, r * 0.14, Math.PI * 1.15, Math.PI * 1.85);
+        ctx.stroke();
+      } else if (isDragged) {
+        // Excited war-cry open "O" mouth while being dragged into battle
+        ctx.beginPath();
+        ctx.ellipse(0, mouthY, r * 0.15, r * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Little pink tongue inside
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.arc(0, mouthY + r * 0.06, r * 0.09, 0, Math.PI);
+        ctx.fill();
+      } else if (typeId === 'fire') {
+        // Smirking / mischievous fang grin for Fire
+        ctx.beginPath();
+        ctx.arc(0, mouthY - r * 0.04, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        // Tiny white fang
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(r * 0.06, mouthY + r * 0.08);
+        ctx.lineTo(r * 0.13, mouthY + r * 0.06);
+        ctx.lineTo(r * 0.10, mouthY + r * 0.18);
+        ctx.closePath();
+        ctx.fill();
+      } else if (typeId === 'plant') {
+        // Cute cat-like ":3" nature smile
+        const w = r * 0.11;
+        ctx.beginPath();
+        ctx.arc(-w, mouthY - r * 0.02, w, 0.1 * Math.PI, 0.9 * Math.PI);
+        ctx.arc(w, mouthY - r * 0.02, w, 0.1 * Math.PI, 0.9 * Math.PI);
+        ctx.stroke();
+      } else {
+        // Cheerful happy smile for Water
+        ctx.beginPath();
+        ctx.arc(0, mouthY - r * 0.05, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // --- Ball Entity ---
+    class Ball {
+      constructor(x, y, radius, typeData, hp = 1) {
+        this.x = x;
+        this.y = y;
+        this.baseRadius = radius;
+        this.type = typeData;
+
+        // Health & Level attributes (Level = HP)
+        this.maxHp = hp;
+        this.hp = hp;
+        this.hitFlashTimer = 0;
+        this.stunnedTimer = 0; // Elastic tether stun frames
+        this.localShakeTimer = 0; // Localized ball shudder
+        this.localShakeIntensity = 0;
+        this.impactSquash = 0; // Localized elastic impact deformation
+
+        // Dynamic smooth radius capped for physics stability
+        this.targetRadius = this.computeRadius(this.hp);
+        this.radius = this.targetRadius;
+
+        // Gentle floating velocity
+        const speed = 0.5 + Math.random() * 0.9;
+        const angle = Math.random() * Math.PI * 2;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+
+        // Visual wobble & entry animation
+        this.scale = 0.1;
+        this.targetScale = 1.0;
+        this.pulsePhase = Math.random() * Math.PI * 2;
+        this.isBeingDragged = false;
+        this.dead = false;
+      }
+
+      get mass() {
+        // Exponential inertia so giant balls hold their ground
+        return Math.max(1, Math.pow(this.hp, 1.45) * 1.4);
+      }
+
+      get attackDamage() {
+        // Super-linear damage scaling so big balls pack a massive punch
+        if (this.hp <= 2) return Math.max(1, this.hp);
+        return Math.round(Math.pow(this.hp, 1.35));
+      }
+
+      get armor() {
+        if (this.hp >= 7) return 2;
+        if (this.hp >= 4) return 1;
+        return 0;
+      }
+
+      computeRadius(currentHp) {
+        if (currentHp <= 1) return this.baseRadius;
+        // Uncapped growth scaling - balls will continue growing infinitely as they level up!
+        const bonus = Math.pow(currentHp - 1, 0.78) * 8.5;
+        return this.baseRadius + bonus;
+      }
+
+      heal(amount = 1) {
+        this.hp += amount;
+        if (this.hp > this.maxHp) {
+          this.maxHp = this.hp;
+        }
+        this.targetRadius = this.computeRadius(this.hp);
+      }
+
+      takeDamage(rawAmount = 1) {
+        const reducedAmount = Math.max(1, rawAmount - this.armor);
+        this.hp -= reducedAmount;
+        this.hitFlashTimer = 8;
+        this.localShakeTimer = 10;
+        this.localShakeIntensity = Math.min(9, 3 + reducedAmount * 1.2);
+        this.impactSquash = -0.22; // Squash inward on impact
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.dead = true;
+        } else {
+          this.targetRadius = this.computeRadius(this.hp);
+        }
+        return reducedAmount;
+      }
+
+      triggerLocalImpact(power = 1) {
+        this.localShakeTimer = 7;
+        this.localShakeIntensity = Math.min(7, 2 + power);
+        this.impactSquash = 0.18; // Swell outward on strike
+      }
+
+      update(width, height, targetX, targetY) {
+        if (this.hitFlashTimer > 0) {
+          this.hitFlashTimer--;
+        }
+        if (this.stunnedTimer > 0) {
+          this.stunnedTimer--;
+        }
+        if (this.localShakeTimer > 0) {
+          this.localShakeTimer--;
+        }
+        if (Math.abs(this.impactSquash) > 0.005) {
+          this.impactSquash *= 0.78;
+        } else {
+          this.impactSquash = 0;
+        }
+
+        // Smoothly interpolate radius towards target HP size
+        this.radius += (this.targetRadius - this.radius) * 0.12;
+
+        // Pop-in entry animation
+        if (this.scale < this.targetScale) {
+          this.scale += (this.targetScale - this.scale) * 0.2;
+        }
+
+        this.pulsePhase += 0.04;
+
+        if (this.isBeingDragged && targetX !== undefined && targetY !== undefined) {
+          // Elastic spring tether physics:
+          // When stunned from knockback/damage, spring relaxes so the ball stretches away then snaps back
+          const dx = targetX - this.x;
+          const dy = targetY - this.y;
+
+          if (this.stunnedTimer > 0) {
+            const springK = 0.045;
+            this.vx = (this.vx + dx * springK) * 0.82;
+            this.vy = (this.vy + dy * springK) * 0.82;
+            this.x += this.vx;
+            this.y += this.vy;
+          } else {
+            const springK = 0.28;
+            this.vx = (this.vx + dx * springK) * 0.55;
+            this.vy = (this.vy + dy * springK) * 0.55;
+            this.x += this.vx;
+            this.y += this.vy;
+          }
+        } else {
+          this.x += this.vx;
+          this.y += this.vy;
+
+          this.vx *= 0.992;
+          this.vy *= 0.992;
+
+          const currentSpd = Math.hypot(this.vx, this.vy);
+          if (currentSpd < 0.35) {
+            const heading = Math.atan2(this.vy, this.vx) || Math.random() * Math.PI * 2;
+            this.vx = Math.cos(heading) * 0.45;
+            this.vy = Math.sin(heading) * 0.45;
+          } else if (currentSpd > MAX_SPEED) {
+            this.vx = (this.vx / currentSpd) * MAX_SPEED;
+            this.vy = (this.vy / currentSpd) * MAX_SPEED;
+          }
+        }
+
+        // Screen bounds constraint (applies to both free and stretched balls)
+        if (this.x - this.radius < 0) {
+          this.x = this.radius;
+          this.vx = Math.abs(this.vx) * 0.8;
+        } else if (this.x + this.radius > width) {
+          this.x = width - this.radius;
+          this.vx = -Math.abs(this.vx) * 0.8;
+        }
+
+        if (this.y - this.radius < 70) {
+          this.y = 70 + this.radius;
+          this.vy = Math.abs(this.vy) * 0.8;
+        } else if (this.y + this.radius > height - 40) {
+          this.y = height - 40 - this.radius;
+          this.vy = -Math.abs(this.vy) * 0.8;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        let drawX = this.x;
+        let drawY = this.y;
+        if (this.localShakeTimer > 0) {
+          drawX += (Math.random() - 0.5) * this.localShakeIntensity * 2;
+          drawY += (Math.random() - 0.5) * this.localShakeIntensity * 2;
+        }
+        ctx.translate(drawX, drawY);
+
+        if (this.impactSquash !== 0) {
+          ctx.scale(1 + this.impactSquash, 1 - this.impactSquash * 0.8);
+        }
+
+        const currentRadius = this.radius * this.scale * (this.isBeingDragged ? 1.08 : 1 + Math.sin(this.pulsePhase) * 0.025);
+
+        // GPU-friendly flat concentric aura rings (Zero shadowBlur / Zero per-frame radial gradients)
+        if (this.hp >= 7) {
+          ctx.beginPath();
+          ctx.arc(0, 0, currentRadius + 8, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.16)';
+          ctx.fill();
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+          ctx.stroke();
+        } else if (this.hp >= 4) {
+          ctx.beginPath();
+          ctx.arc(0, 0, currentRadius + 6, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(236, 72, 153, 0.14)';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = 'rgba(236, 72, 153, 0.45)';
+          ctx.stroke();
+        } else if (this.hp > 1 || this.isBeingDragged) {
+          ctx.beginPath();
+          ctx.arc(0, 0, currentRadius + 4, 0, Math.PI * 2);
+          ctx.fillStyle = this.type.auraColor;
+          ctx.fill();
+        }
+
+        if (this.hitFlashTimer > 0) {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Fast layered flat circles for 3D bubble depth without gradient rasterization
+          ctx.fillStyle = this.type.baseColor;
+          ctx.beginPath();
+          ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = this.type.midColor;
+          ctx.beginPath();
+          ctx.arc(-currentRadius * 0.08, -currentRadius * 0.08, currentRadius * 0.84, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = this.type.lightColor;
+          ctx.beginPath();
+          ctx.arc(-currentRadius * 0.18, -currentRadius * 0.18, currentRadius * 0.56, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Specular highlight dot
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+          ctx.beginPath();
+          ctx.arc(-currentRadius * 0.34, -currentRadius * 0.34, currentRadius * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Crisp Outer Ring
+        ctx.lineWidth = this.isBeingDragged ? 3.5 : (this.hp >= 4 ? 3.5 : 2.2);
+        ctx.strokeStyle = this.hp >= 7 ? '#fde047' : (this.hp >= 4 ? '#f472b6' : (this.hp > 1 ? '#c084fc' : this.type.ringColor));
+        ctx.beginPath();
+        ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw Elemental Character Face & Headpiece
+        drawElementalCharacter(ctx, this, currentRadius);
+
+        // Only show Level badge (> 1 HP); all other stats hidden
+        if (this.hp > 1) {
+          const badgeX = currentRadius * 0.68;
+          const badgeY = -currentRadius * 0.68;
+          const badgeRadius = this.hp >= 7 ? 15 : 13;
+
+          ctx.beginPath();
+          ctx.arc(badgeX, badgeY, badgeRadius, 0, Math.PI * 2);
+          ctx.fillStyle = '#0f172a';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = this.hp >= 7 ? '#facc15' : (this.hp >= 3 ? '#ec4899' : '#a855f7');
+          ctx.stroke();
+
+          ctx.font = 'bold 11px "Fredoka One", cursive, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`Lv${this.hp}`, badgeX, badgeY + 1);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // --- Particle System for Bursts & Pops ---
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        const speed = 2 + Math.random() * 5;
+        const angle = Math.random() * Math.PI * 2;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.size = 2.5 + Math.random() * 3.5;
+        this.alpha = 1.0;
+        this.decay = 0.03 + Math.random() * 0.03;
+        this.gravity = 0.1;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.alpha -= this.decay;
+        this.size *= 0.95;
+      }
+
+      draw(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(1, this.size), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // --- Localized Clash Impact Ring (Replaces global screen shake) ---
+    class ImpactRing {
+      constructor(x, y, maxRadius, color, lineWidth = 5) {
+        this.x = x;
+        this.y = y;
+        this.radius = 8;
+        this.maxRadius = maxRadius;
+        this.color = color;
+        this.alpha = 0.95;
+        this.lineWidth = lineWidth;
+      }
+
+      update() {
+        this.radius += (this.maxRadius - this.radius) * 0.24;
+        this.alpha -= 0.065;
+        this.lineWidth *= 0.92;
+      }
+
+      draw(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = Math.max(1, this.lineWidth);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // --- Floating Score & Damage Popups (Clean Digits & Color) ---
+    class FloatingText {
+      constructor(x, y, text, color, fontSize = 22) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.fontSize = fontSize;
+        this.alpha = 1.0;
+        this.vy = -1.9;
+      }
+
+      update() {
+        this.y += this.vy;
+        this.alpha -= 0.026;
+      }
+
+      draw(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.font = `bold ${this.fontSize}px "Fredoka One", cursive, sans-serif`;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.lineWidth = 3.5;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeText(this.text, this.x, this.y);
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    // --- Main Game State Management ---
+    class Game {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d', { alpha: false });
+
+        this.gameMode = 'arcade'; // 'arcade' or 'endless'
+        this.score = 0;
+        this.highScoreArcade = parseInt(localStorage.getItem('rps_high_score') || '0', 10);
+        this.highScoreEndless = parseInt(localStorage.getItem('rps_high_score_endless') || '0', 10);
+        this.combo = 0;
+
+        this.balls = [];
+        this.particles = [];
+        this.impactRings = [];
+        this.floatingTexts = [];
+
+        this.lastSpawnTime = 0;
+        this.elapsedMs = 0;
+        this.lastFrameTime = 0;
+        this.isPaused = false;
+        this.isGameOver = false;
+        this.isRunning = false;
+
+        this.draggedBall = null;
+        this.dragOffset = { x: 0, y: 0 };
+        this.pointerPos = { x: 0, y: 0 };
+        this.clashCooldown = false;
+
+        // Cached HUD values to prevent redundant DOM layout thrashing
+        this.hudCache = {
+          score: -1,
+          highScore: -1,
+          ballCount: -1,
+          maxBalls: -1,
+          combo: -1,
+          tierName: '',
+          mode: '',
+          seconds: -1
+        };
+
+        this.bgCanvas = document.createElement('canvas');
+        this.initCanvasSize();
+        this.bindEvents();
+        this.updateHUD();
+      }
+
+      get highScore() {
+        return this.gameMode === 'endless' ? this.highScoreEndless : this.highScoreArcade;
+      }
+
+      set highScore(val) {
+        if (this.gameMode === 'endless') {
+          this.highScoreEndless = val;
+          localStorage.setItem('rps_high_score_endless', val.toString());
+        } else {
+          this.highScoreArcade = val;
+          localStorage.setItem('rps_high_score', val.toString());
+        }
+      }
+
+      // Dynamic Arena Capacity
+      get maxBalls() {
+        if (this.gameMode === 'arcade') {
+          // Cap of 42 in Arcade mode so players have room for huge swarm clashes before overflowing
+          return BASE_MAX_BALLS;
+        }
+        // In Endless Chill mode, cap relaxes up to 34 balls for comfy swarm plowing without lag
+        return 34;
+      }
+
+      // Mode-Specific Spawn Interval
+      get spawnInterval() {
+        if (this.gameMode === 'arcade') {
+          // Scales smoothly over elapsed time so an average player gets overwhelmed right around ~60 seconds:
+          // 0s: ~960ms | 20s: ~720ms | 40s: ~480ms | 55s: ~310ms | 65s+: ~210ms frenzy!
+          const elapsedSec = this.elapsedMs / 1000;
+          const timeRamp = Math.pow(elapsedSec, 1.18) * 9.8;
+          return Math.max(190, 960 - timeRamp);
+        } else {
+          // Endless Chill mode: relaxed steady pace with gentle slowdown when lots of balls are on screen
+          const fillRatio = this.balls.length / this.maxBalls;
+          if (fillRatio > 0.75) return 1350;
+          return 1000;
+        }
+      }
+
+      initCanvasSize() {
+        // Cap DPR to 1.5 to prevent 3x Retina fill-rate overheating on iPhones
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+
+        this.canvas.width = Math.floor(this.width * dpr);
+        this.canvas.height = Math.floor(this.height * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Pre-render static background once onto offscreen canvas
+        this.prerenderBackground(dpr);
+      }
+
+      prerenderBackground(dpr) {
+        this.bgCanvas.width = Math.floor(this.width * dpr);
+        this.bgCanvas.height = Math.floor(this.height * dpr);
+        const bctx = this.bgCanvas.getContext('2d', { alpha: false });
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const grad = bctx.createRadialGradient(
+          this.width / 2, this.height / 2, 80,
+          this.width / 2, this.height / 2, Math.max(this.width, this.height) * 0.75
+        );
+        grad.addColorStop(0, '#0f172a');
+        grad.addColorStop(0.7, '#090d16');
+        grad.addColorStop(1, '#020617');
+
+        bctx.fillStyle = grad;
+        bctx.fillRect(0, 0, this.width, this.height);
+
+        bctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+        bctx.lineWidth = 1;
+        const gridSize = 48;
+        bctx.beginPath();
+        for (let x = 0; x < this.width; x += gridSize) {
+          bctx.moveTo(x, 0);
+          bctx.lineTo(x, this.height);
+        }
+        for (let y = 0; y < this.height; y += gridSize) {
+          bctx.moveTo(0, y);
+          bctx.lineTo(this.width, y);
+        }
+        bctx.stroke();
+      }
+
+      bindEvents() {
+        window.addEventListener('resize', () => {
+          this.initCanvasSize();
+        });
+
+        // Pointer (Mouse + Touch) Listeners
+        const getCanvasCoords = (e) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+          };
+        };
+
+        const handlePointerDown = (e) => {
+          if (!this.isRunning || this.isPaused || this.isGameOver) return;
+          sound.init();
+
+          const pos = getCanvasCoords(e);
+          this.pointerPos = pos;
+
+          // Find topmost clicked ball (reverse loop)
+          for (let i = this.balls.length - 1; i >= 0; i--) {
+            const ball = this.balls[i];
+            const dist = Math.hypot(ball.x - pos.x, ball.y - pos.y);
+            if (dist <= ball.radius * 1.25) {
+              this.draggedBall = ball;
+              ball.isBeingDragged = true;
+              ball.stunnedTimer = 0;
+              this.dragOffset.x = ball.x - pos.x;
+              this.dragOffset.y = ball.y - pos.y;
+              sound.playGrab();
+
+              // Bring dragged ball to end of array so it renders above other balls
+              this.balls.splice(i, 1);
+              this.balls.push(ball);
+              break;
+            }
+          }
+        };
+
+        const handlePointerMove = (e) => {
+          if (!this.isRunning || this.isPaused || this.isGameOver) return;
+          this.pointerPos = getCanvasCoords(e);
+        };
+
+        const handlePointerUp = () => {
+          if (this.draggedBall) {
+            this.draggedBall.isBeingDragged = false;
+            this.draggedBall.stunnedTimer = 0;
+            this.draggedBall = null;
+          }
+        };
+
+        // Touch events
+        this.canvas.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          handlePointerDown(e);
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+          if (this.draggedBall) e.preventDefault();
+          handlePointerMove(e);
+        }, { passive: false });
+
+        window.addEventListener('touchend', handlePointerUp);
+        window.addEventListener('touchcancel', handlePointerUp);
+
+        // Mouse events
+        this.canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        // UI Mode Start Buttons
+        document.getElementById('btnStartArcade').addEventListener('click', () => {
+          sound.init();
+          document.getElementById('startModal').classList.add('hidden');
+          this.start('arcade');
+        });
+
+        document.getElementById('btnStartEndless').addEventListener('click', () => {
+          sound.init();
+          document.getElementById('startModal').classList.add('hidden');
+          this.start('endless');
+        });
+
+        document.getElementById('btnRestartGame').addEventListener('click', () => {
+          document.getElementById('gameOverModal').classList.add('hidden');
+          this.start('arcade');
+        });
+
+        document.getElementById('btnSwitchToEndless').addEventListener('click', () => {
+          document.getElementById('gameOverModal').classList.add('hidden');
+          this.start('endless');
+        });
+
+        document.getElementById('btnPause').addEventListener('click', () => {
+          this.togglePause();
+        });
+
+        document.getElementById('btnResume').addEventListener('click', () => {
+          this.togglePause();
+        });
+
+        document.getElementById('btnRestartFromPause').addEventListener('click', () => {
+          document.getElementById('pauseModal').classList.add('hidden');
+          this.start(this.gameMode);
+        });
+
+        document.getElementById('btnSwitchModeFromPause').addEventListener('click', () => {
+          this.isPaused = false;
+          this.isRunning = false;
+          document.getElementById('pauseModal').classList.add('hidden');
+          document.getElementById('startModal').classList.remove('hidden');
+        });
+
+        // Sound Toggle Button
+        const btnSound = document.getElementById('btnSound');
+        btnSound.addEventListener('click', () => {
+          sound.init();
+          sound.enabled = !sound.enabled;
+          btnSound.textContent = sound.enabled ? '🔊' : '🔇';
+        });
+      }
+
+      start(mode = this.gameMode) {
+        this.gameMode = mode;
+        this.score = 0;
+        this.combo = 0;
+        this.balls = [];
+        this.particles = [];
+        this.impactRings = [];
+        this.floatingTexts = [];
+        this.isGameOver = false;
+        this.isPaused = false;
+        this.isRunning = true;
+        this.draggedBall = null;
+        this.clashCooldown = false;
+        const now = performance.now();
+        this.lastSpawnTime = now;
+        this.lastFrameTime = now;
+        this.elapsedMs = 0;
+
+        // Spawn 4 initial balls to start right away
+        for (let i = 0; i < 4; i++) {
+          this.spawnBall();
+        }
+
+        this.updateHUD();
+      }
+
+      calculateSpawnHP() {
+        // Under 25 score: Always 1 HP
+        if (this.score < 25) {
+          return 1;
+        }
+
+        // Keep plenty of 1-2 HP swarm fodder while introducing higher-HP titans as score scales
+        const rand = Math.random();
+
+        if (this.score < 50) {
+          return rand < 0.65 ? 1 : 2;
+        } else if (this.score < 90) {
+          if (rand < 0.50) return 1;
+          if (rand < 0.82) return 2;
+          return 3;
+        } else if (this.score < 160) {
+          if (rand < 0.45) return 1;
+          if (rand < 0.72) return 2;
+          if (rand < 0.90) return 3;
+          return 4;
+        } else if (this.score < 280) {
+          if (rand < 0.42) return 1;
+          if (rand < 0.68) return 2;
+          if (rand < 0.85) return 3;
+          if (rand < 0.95) return 4;
+          return 5 + Math.floor(Math.random() * 2); // 5-6 HP
+        } else {
+          if (rand < 0.40) return 1; // 40% swarm fodder for plowing!
+          if (rand < 0.65) return 2;
+          if (rand < 0.82) return 3;
+          if (rand < 0.93) return 4;
+          return 5 + Math.floor(Math.random() * 4); // 5-8 HP boss balls
+        }
+      }
+
+      spawnBall() {
+        if (this.balls.length >= this.maxBalls) {
+          if (this.gameMode === 'arcade') {
+            this.triggerGameOver();
+          }
+          // In Endless Chill mode, simply pause spawning when the arena is comfortably full!
+          return;
+        }
+
+        const radius = BASE_BALL_RADIUS;
+        const padding = radius + 24;
+
+        // Smart Spawn: sample candidate points and pick the one with maximum distance from other balls
+        let bestX = padding + Math.random() * (this.width - padding * 2);
+        let bestY = 80 + Math.random() * (this.height - 140);
+        let maxMinDist = -1;
+
+        if (this.balls.length > 0) {
+          const SAMPLES = 14;
+          for (let s = 0; s < SAMPLES; s++) {
+            const candidateX = padding + Math.random() * (this.width - padding * 2);
+            const candidateY = 80 + Math.random() * (this.height - 140);
+
+            let minDist = Infinity;
+            for (let i = 0; i < this.balls.length; i++) {
+              const b = this.balls[i];
+              const dist = Math.hypot(b.x - candidateX, b.y - candidateY) - (b.radius + radius);
+              if (dist < minDist) minDist = dist;
+            }
+
+            if (minDist > maxMinDist) {
+              maxMinDist = minDist;
+              bestX = candidateX;
+              bestY = candidateY;
+            }
+
+            // Ideal candidate found (plenty of room around)
+            if (maxMinDist > 90) break;
+          }
+        }
+
+        const typeData = TYPE_KEYS[Math.floor(Math.random() * TYPE_KEYS.length)];
+        const hp = this.calculateSpawnHP();
+        const ball = new Ball(bestX, bestY, radius, typeData, hp);
+
+        this.balls.push(ball);
+        sound.playSpawn();
+        this.updateHUD();
+      }
+
+      checkClashForDraggedBall() {
+        if (!this.draggedBall || this.draggedBall.dead || this.clashCooldown) return;
+
+        // Iterate backwards so if a ball pops mid-sweep, indices stay valid
+        for (let i = this.balls.length - 1; i >= 0; i--) {
+          const other = this.balls[i];
+          if (!other || other === this.draggedBall || other.dead) continue;
+
+          const dx = other.x - this.draggedBall.x;
+          const dy = other.y - this.draggedBall.y;
+          const minDist = (this.draggedBall.radius + other.radius) * 0.95;
+
+          // Quick bounding box check before hypot
+          if (Math.abs(dx) > minDist || Math.abs(dy) > minDist) continue;
+
+          const distSq = dx * dx + dy * dy;
+          if (distSq < minDist * minDist) {
+            const keepPlowing = this.resolveClash(this.draggedBall, other);
+            // If our titan one-shot a smaller ball, keep plowing through the swarm in the same frame!
+            if (!keepPlowing || !this.draggedBall || this.draggedBall.dead) {
+              break;
+            }
+          }
+        }
+      }
+
+      resolveClash(activeBall, targetBall) {
+        if (!activeBall || !targetBall || activeBall.dead || targetBall.dead) return false;
+
+        const clashX = (activeBall.x + targetBall.x) / 2;
+        const clashY = (activeBall.y + targetBall.y) / 2;
+
+        const aType = activeBall.type.id;
+        const bType = targetBall.type.id;
+
+        // Elemental Triangle Resolution:
+        // Water douses Fire | Fire burns Plant | Plant absorbs Water
+        let result = 0;
+        if (aType === bType) {
+          result = 0;
+        } else if (
+          (aType === 'water' && bType === 'fire') ||
+          (aType === 'fire' && bType === 'plant') ||
+          (aType === 'plant' && bType === 'water')
+        ) {
+          result = 1;
+        } else {
+          result = -1;
+        }
+
+        const angle = Math.atan2(targetBall.y - activeBall.y, targetBall.x - activeBall.x) || (Math.random() * Math.PI * 2);
+        const totalMass = activeBall.mass + targetBall.mass;
+        const activeMassRatio = activeBall.mass / totalMass;
+        const targetMassRatio = targetBall.mass / totalMass;
+
+        // Localized impact pulse & audio on winning/losing clashes only (no impact indicators on draws)
+        if (result !== 0) {
+          const maxParticipantHp = Math.max(activeBall.hp, targetBall.hp);
+          const ringSpread = Math.min(130, (activeBall.radius + targetBall.radius) * 0.85 + maxParticipantHp * 5);
+          this.addImpactRing(clashX, clashY, ringSpread, activeBall.type.lightColor, maxParticipantHp >= 4 ? 7 : 4);
+          if (maxParticipantHp >= 4) {
+            sound.playHeavyImpact();
+          }
+        }
+
+        let plowedThrough = false;
+
+        if (result === 1) {
+          // PLAYER WIN (activeBall beats targetBall)
+          // Heavyweight Clash Bonus: When two big balls (HP >= 3) collide, amplify damage so titans shred each other!
+          let rawDmg = activeBall.attackDamage;
+          if (activeBall.hp >= 3 && targetBall.hp >= 3) {
+            rawDmg = Math.ceil(rawDmg * (1 + Math.min(1.5, targetBall.hp * 0.16)));
+          }
+          const actualDmg = targetBall.takeDamage(rawDmg);
+          activeBall.triggerLocalImpact(Math.min(6, actualDmg));
+
+          this.combo++;
+          const comboMul = this.combo >= 3 ? 2 : 1;
+
+          if (targetBall.dead) {
+            // Scaled EXP / HP gain & score reward based on defeated ball's maxHp
+            const expGain = Math.max(1, Math.ceil(targetBall.maxHp * 0.9));
+            activeBall.heal(expGain);
+
+            const baseScoreReward = Math.round(Math.pow(targetBall.maxHp, 1.45));
+            const earnedPoints = baseScoreReward * comboMul;
+            this.score += earnedPoints;
+
+            sound.playWin(this.combo);
+            sound.playHeal();
+            this.createBurst(clashX, clashY, '#10b981', 10);
+            this.addFloatingText(clashX, clashY, `+${earnedPoints}`, '#34d399', 28);
+            this.addFloatingText(activeBall.x, activeBall.y - activeBall.radius - 8, `+${expGain} HP`, '#38bdf8', 20);
+
+            // Elemental Titan Shockwave: High-HP balls (Lv5+) or big kills release a splash wave that damages vulnerable nearby balls
+            if (activeBall.hp >= 5 || targetBall.maxHp >= 3) {
+              this.triggerElementalShockwave(activeBall, clashX, clashY, Math.max(1, Math.floor(activeBall.hp * 0.4)));
+            }
+
+            // Plow through swarms without cooldown locking!
+            plowedThrough = true;
+          } else {
+            // Chip hit on a durable titan still grants +1 HP
+            activeBall.heal(1);
+            const hitPoints = Math.max(1, Math.floor(actualDmg * 0.5)) * comboMul;
+            this.score += hitPoints;
+
+            sound.playDamageHit();
+            sound.playHeal();
+            this.createBurst(clashX, clashY, '#a855f7', 8);
+            this.addFloatingText(clashX, clashY, `-${actualDmg}`, '#c084fc', 24);
+            this.addFloatingText(activeBall.x, activeBall.y - activeBall.radius - 8, `+1 HP`, '#38bdf8', 18);
+
+            // Mass-scaled knockback on target; slight elastic recoil on activeBall
+            const impulse = 10.0 * activeMassRatio;
+            targetBall.vx = Math.cos(angle) * impulse;
+            targetBall.vy = Math.sin(angle) * impulse;
+            targetBall.x += Math.cos(angle) * (20 * activeMassRatio);
+            targetBall.y += Math.sin(angle) * (20 * activeMassRatio);
+
+            activeBall.vx -= Math.cos(angle) * (5.5 * targetMassRatio);
+            activeBall.vy -= Math.sin(angle) * (5.5 * targetMassRatio);
+            activeBall.stunnedTimer = 6;
+          }
+
+        } else if (result === -1) {
+          // PLAYER LOSS (targetBall beats activeBall)
+          const rawEnemyDmg = targetBall.attackDamage;
+          this.combo = 0;
+          this.score = Math.max(0, this.score - 1);
+          const actualDmgTaken = activeBall.takeDamage(rawEnemyDmg);
+          targetBall.triggerLocalImpact(Math.min(6, actualDmgTaken));
+
+          // Enemy ball levels up faster if it defeats a huge player ball
+          const enemyExp = activeBall.dead ? Math.max(1, Math.ceil(activeBall.maxHp * 0.75)) : 1;
+          targetBall.heal(enemyExp);
+
+          sound.playLoss();
+          this.createBurst(clashX, clashY, '#f43f5e', 12);
+          this.addFloatingText(clashX, clashY, `-${actualDmgTaken}`, '#fb7185', 26);
+
+          if (activeBall.dead) {
+            this.draggedBall = null;
+          } else {
+            // Keep ball attached to finger/cursor! Stretch violently via spring stun & knockback
+            activeBall.stunnedTimer = 15; // ~250ms elastic stretch recovery
+            const recoilImpulse = 14.5 * Math.max(0.35, targetMassRatio);
+            activeBall.vx = -Math.cos(angle) * recoilImpulse;
+            activeBall.vy = -Math.sin(angle) * recoilImpulse;
+            activeBall.x -= Math.cos(angle) * (24 * Math.max(0.4, targetMassRatio));
+            activeBall.y -= Math.sin(angle) * (24 * Math.max(0.4, targetMassRatio));
+
+            targetBall.vx = Math.cos(angle) * (4.5 * activeMassRatio);
+            targetBall.vy = Math.sin(angle) * (4.5 * activeMassRatio);
+          }
+
+        } else {
+          // DRAW (Clean bounce only — no impact rings, bursts, or floating text indicators)
+          sound.playDraw();
+
+          const drawPush = 8.5;
+          targetBall.vx = Math.cos(angle) * drawPush * activeMassRatio;
+          targetBall.vy = Math.sin(angle) * drawPush * activeMassRatio;
+          targetBall.x += Math.cos(angle) * (16 * activeMassRatio);
+          targetBall.y += Math.sin(angle) * (16 * activeMassRatio);
+
+          // Elastic stretch bounce on draw without dropping the ball
+          activeBall.stunnedTimer = 10;
+          activeBall.vx = -Math.cos(angle) * drawPush * Math.max(0.4, targetMassRatio);
+          activeBall.vy = -Math.sin(angle) * drawPush * Math.max(0.4, targetMassRatio);
+          activeBall.x -= Math.cos(angle) * (16 * Math.max(0.4, targetMassRatio));
+          activeBall.y -= Math.sin(angle) * (16 * Math.max(0.4, targetMassRatio));
+        }
+
+        // Clean up dead balls
+        for (let i = this.balls.length - 1; i >= 0; i--) {
+          if (this.balls[i].dead) {
+            this.balls.splice(i, 1);
+          }
+        }
+        if (this.draggedBall && this.draggedBall.dead) {
+          this.draggedBall = null;
+        }
+
+        // Only trigger clash cooldown if we didn't obliterate the target (so big balls can cleave through swarms!)
+        if (!plowedThrough) {
+          this.triggerClashCooldown();
+        }
+
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+        }
+
+        this.updateHUD();
+        return plowedThrough;
+      }
+
+      triggerElementalShockwave(sourceBall, centerX, centerY, splashDmg) {
+        const waveRadius = sourceBall.radius * 2.3 + 45;
+        const sType = sourceBall.type.id;
+        this.addImpactRing(centerX, centerY, waveRadius, sourceBall.type.ringColor, 8);
+
+        for (let i = this.balls.length - 1; i >= 0; i--) {
+          const b = this.balls[i];
+          if (!b || b === sourceBall || b.dead) continue;
+
+          const bType = b.type.id;
+          const canBeat =
+            (sType === 'water' && bType === 'fire') ||
+            (sType === 'fire' && bType === 'plant') ||
+            (sType === 'plant' && bType === 'water');
+
+          if (!canBeat) continue;
+
+          const dx = b.x - centerX;
+          const dy = b.y - centerY;
+          if (Math.abs(dx) > waveRadius || Math.abs(dy) > waveRadius) continue;
+
+          const dist = Math.hypot(dx, dy);
+          if (dist <= waveRadius + b.radius) {
+            b.takeDamage(splashDmg);
+            if (b.dead) {
+              this.score += Math.max(1, b.maxHp);
+              this.createBurst(b.x, b.y, '#34d399', 5);
+              this.addFloatingText(b.x, b.y, `+${b.maxHp}`, '#6ee7b7', 20);
+            } else {
+              const pushAngle = Math.atan2(dy, dx);
+              b.vx += Math.cos(pushAngle) * 5;
+              b.vy += Math.sin(pushAngle) * 5;
+            }
+          }
+        }
+      }
+
+      triggerClashCooldown() {
+        this.clashCooldown = true;
+        setTimeout(() => {
+          this.clashCooldown = false;
+        }, 100);
+      }
+
+      createBurst(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
+          if (this.particles.length >= MAX_PARTICLES) {
+            // Overwrite oldest particle to avoid allocations/lag
+            const p = this.particles.shift();
+            p.x = x;
+            p.y = y;
+            p.color = color;
+            const speed = 2 + Math.random() * 5;
+            const angle = Math.random() * Math.PI * 2;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+            p.size = 2.5 + Math.random() * 3.5;
+            p.alpha = 1.0;
+            this.particles.push(p);
+          } else {
+            this.particles.push(new Particle(x, y, color));
+          }
+        }
+      }
+
+      addFloatingText(x, y, text, color, fontSize = 22) {
+        if (this.floatingTexts.length > 18) {
+          this.floatingTexts.shift();
+        }
+        this.floatingTexts.push(new FloatingText(x, y, text, color, fontSize));
+      }
+
+      addImpactRing(x, y, maxRadius, color, lineWidth = 5) {
+        if (this.impactRings.length > 10) {
+          this.impactRings.shift();
+        }
+        this.impactRings.push(new ImpactRing(x, y, maxRadius, color, lineWidth));
+      }
+
+      resolveBallCollisions() {
+        const len = this.balls.length;
+        for (let i = 0; i < len; i++) {
+          const b1 = this.balls[i];
+          if (b1.dead) continue;
+
+          for (let j = i + 1; j < len; j++) {
+            const b2 = this.balls[j];
+            if (b2.dead) continue;
+
+            // Skip passive bounce if one is the dragged ball (clash handles that)
+            if (b1 === this.draggedBall || b2 === this.draggedBall) continue;
+
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const minDist = b1.radius + b2.radius + 4;
+
+            if (Math.abs(dx) >= minDist || Math.abs(dy) >= minDist) continue;
+
+            const distSq = dx * dx + dy * dy;
+            if (distSq < minDist * minDist && distSq > 0.0001) {
+              const dist = Math.sqrt(distSq);
+              const overlap = Math.min(16, minDist - dist);
+              const nx = dx / dist;
+              const ny = dy / dist;
+
+              const totalMass = b1.mass + b2.mass;
+              const r1 = b2.mass / totalMass;
+              const r2 = b1.mass / totalMass;
+
+              b1.x -= nx * overlap * r1 * 0.6;
+              b1.y -= ny * overlap * r1 * 0.6;
+              b2.x += nx * overlap * r2 * 0.6;
+              b2.y += ny * overlap * r2 * 0.6;
+
+              const kx = b1.vx - b2.vx;
+              const ky = b1.vy - b2.vy;
+              const p = 2 * (nx * kx + ny * ky) / totalMass;
+              if (p > 0) {
+                const bounce = 0.28;
+                b1.vx -= p * b2.mass * nx * bounce;
+                b1.vy -= p * b2.mass * ny * bounce;
+                b2.vx += p * b1.mass * nx * bounce;
+                b2.vy += p * b1.mass * ny * bounce;
+              }
+            }
+          }
+        }
+      }
+
+      togglePause() {
+        if (!this.isRunning || this.isGameOver) return;
+        this.isPaused = !this.isPaused;
+        const pauseModal = document.getElementById('pauseModal');
+        if (this.isPaused) {
+          pauseModal.classList.remove('hidden');
+        } else {
+          pauseModal.classList.add('hidden');
+          const now = performance.now();
+          this.lastSpawnTime = now;
+          this.lastFrameTime = now;
+        }
+      }
+
+      formatTime(ms) {
+        const totalSec = Math.floor(ms / 1000);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      }
+
+      triggerGameOver() {
+        this.isGameOver = true;
+        this.isRunning = false;
+        this.draggedBall = null;
+        sound.playGameOver();
+
+        document.getElementById('gameOverSubtitle').textContent = `You survived ${this.formatTime(this.elapsedMs)} in Arcade Blitz!`;
+        document.getElementById('finalScoreDisplay').textContent = this.score;
+        document.getElementById('bestScoreDisplay').textContent = this.highScore;
+        document.getElementById('gameOverModal').classList.remove('hidden');
+      }
+
+      updateHUD() {
+        if (this.hudCache.score !== this.score) {
+          this.hudCache.score = this.score;
+          document.getElementById('scoreDisplay').textContent = this.score;
+        }
+        if (this.hudCache.highScore !== this.highScore) {
+          this.hudCache.highScore = this.highScore;
+          document.getElementById('highScoreDisplay').textContent = this.highScore;
+        }
+
+        if (this.hudCache.mode !== this.gameMode) {
+          this.hudCache.mode = this.gameMode;
+          const modeBadge = document.getElementById('modeBadge');
+          const timerBadge = document.getElementById('timerBadge');
+          if (this.gameMode === 'endless') {
+            modeBadge.textContent = '🌊 CHILL';
+            modeBadge.className = 'glass-panel px-2.5 py-0.5 rounded-lg w-fit text-[11px] font-black tracking-wide border-emerald-500/50 bg-emerald-950/40 text-emerald-300';
+            timerBadge.classList.add('hidden');
+          } else {
+            modeBadge.textContent = '⚡ ARCADE';
+            modeBadge.className = 'glass-panel px-2.5 py-0.5 rounded-lg w-fit text-[11px] font-black tracking-wide border-amber-500/50 bg-amber-950/40 text-amber-300';
+            timerBadge.classList.remove('hidden');
+          }
+        }
+
+        if (this.gameMode === 'arcade') {
+          const sec = Math.floor(this.elapsedMs / 1000);
+          if (this.hudCache.seconds !== sec) {
+            this.hudCache.seconds = sec;
+            document.getElementById('timerText').textContent = this.formatTime(this.elapsedMs);
+          }
+        }
+
+        const count = this.balls.length;
+        const currentCap = this.maxBalls;
+        if (this.hudCache.ballCount !== count || this.hudCache.maxBalls !== currentCap || this.hudCache.mode !== this.gameMode) {
+          this.hudCache.ballCount = count;
+          this.hudCache.maxBalls = currentCap;
+          const counterEl = document.getElementById('ballCounter');
+          const pressureBar = document.getElementById('pressureBar');
+          const dangerWarning = document.getElementById('dangerWarning');
+
+          if (this.gameMode === 'endless') {
+            counterEl.textContent = `${count} BALLS`;
+            const pct = Math.min(100, (count / currentCap) * 100);
+            pressureBar.style.width = `${pct}%`;
+            counterEl.classList.add('text-cyan-300');
+            counterEl.classList.remove('text-rose-400', 'font-black');
+            dangerWarning.classList.add('hidden');
+          } else {
+            counterEl.textContent = `${count} / ${currentCap}`;
+            const pct = Math.min(100, (count / currentCap) * 100);
+            pressureBar.style.width = `${pct}%`;
+
+            if (count >= currentCap - 5) {
+              counterEl.classList.remove('text-cyan-300');
+              counterEl.classList.add('text-rose-400', 'font-black');
+              dangerWarning.classList.remove('hidden');
+            } else {
+              counterEl.classList.add('text-cyan-300');
+              counterEl.classList.remove('text-rose-400', 'font-black');
+              dangerWarning.classList.add('hidden');
+            }
+          }
+        }
+
+        if (this.hudCache.combo !== this.combo) {
+          this.hudCache.combo = this.combo;
+          const comboBadge = document.getElementById('comboBadge');
+          const comboText = document.getElementById('comboMultiplierText');
+          if (this.combo >= 2) {
+            comboBadge.classList.remove('hidden');
+            comboBadge.classList.add('flex');
+            comboText.textContent = `${this.combo}x`;
+          } else {
+            comboBadge.classList.add('hidden');
+            comboBadge.classList.remove('flex');
+          }
+        }
+
+        let tierName = '';
+        if (this.gameMode !== 'endless') {
+          if (this.score >= 280) tierName = 'SWARM TITANS (T5)';
+          else if (this.score >= 160) tierName = 'ELITE SWARM (T4)';
+          else if (this.score >= 90) tierName = 'HIGH HP (T3)';
+          else if (this.score >= 50) tierName = 'MULTI HP (T2)';
+          else if (this.score >= 25) tierName = 'HP RAMP (T1)';
+        }
+
+        if (this.hudCache.tierName !== tierName) {
+          this.hudCache.tierName = tierName;
+          const hpTierBadge = document.getElementById('hpTierBadge');
+          const hpTierText = document.getElementById('hpTierText');
+          if (tierName) {
+            hpTierBadge.classList.remove('hidden');
+            hpTierText.textContent = tierName;
+          } else {
+            hpTierBadge.classList.add('hidden');
+          }
+        }
+      }
+
+      update(now) {
+        if (!this.isRunning || this.isPaused || this.isGameOver) return;
+
+        // Track elapsed time for Arcade survival scaling
+        if (this.lastFrameTime > 0) {
+          const dt = Math.min(100, now - this.lastFrameTime);
+          this.elapsedMs += dt;
+        }
+        this.lastFrameTime = now;
+
+        if (this.gameMode === 'arcade') {
+          const sec = Math.floor(this.elapsedMs / 1000);
+          if (sec !== this.hudCache.seconds) {
+            this.updateHUD();
+          }
+        }
+
+        // Dynamic Swarm Spawning cycle
+        if (now - this.lastSpawnTime >= this.spawnInterval) {
+          this.spawnBall();
+          this.lastSpawnTime = now;
+        }
+
+        // Update Balls (including elastic tether target for draggedBall)
+        const targetX = this.pointerPos.x + this.dragOffset.x;
+        const targetY = this.pointerPos.y + this.dragOffset.y;
+        for (let i = 0; i < this.balls.length; i++) {
+          const b = this.balls[i];
+          if (b === this.draggedBall) {
+            b.update(this.width, this.height, targetX, targetY);
+          } else {
+            b.update(this.width, this.height);
+          }
+        }
+
+        // Check clashes for the spring-tethered dragged ball every frame
+        if (this.draggedBall) {
+          this.checkClashForDraggedBall();
+        }
+
+        // Fast & stable soft collision resolver
+        this.resolveBallCollisions();
+
+        // Update Particles using fast swap-and-pop removal
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.update();
+          if (p.alpha <= 0) {
+            this.particles[i] = this.particles[this.particles.length - 1];
+            this.particles.pop();
+          }
+        }
+
+        // Update Localized Impact Rings
+        for (let i = this.impactRings.length - 1; i >= 0; i--) {
+          const ir = this.impactRings[i];
+          ir.update();
+          if (ir.alpha <= 0) {
+            this.impactRings[i] = this.impactRings[this.impactRings.length - 1];
+            this.impactRings.pop();
+          }
+        }
+
+        // Update Floating Texts using fast swap-and-pop removal
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+          const ft = this.floatingTexts[i];
+          ft.update();
+          if (ft.alpha <= 0) {
+            this.floatingTexts[i] = this.floatingTexts[this.floatingTexts.length - 1];
+            this.floatingTexts.pop();
+          }
+        }
+      }
+
+      render() {
+        // Draw cached static background in a single blit
+        this.ctx.drawImage(this.bgCanvas, 0, 0, this.width, this.height);
+
+        this.ctx.save();
+
+        // Draw Localized Impact Shockwave Rings behind balls
+        for (let i = 0; i < this.impactRings.length; i++) {
+          this.impactRings[i].draw(this.ctx);
+        }
+
+        // Draw elastic tether band when dragging and stretched > 8px
+        if (this.draggedBall && !this.draggedBall.dead) {
+          const anchorX = this.pointerPos.x + this.dragOffset.x;
+          const anchorY = this.pointerPos.y + this.dragOffset.y;
+          const dx = anchorX - this.draggedBall.x;
+          const dy = anchorY - this.draggedBall.y;
+          const stretchDist = Math.hypot(dx, dy);
+
+          if (stretchDist > 8) {
+            this.ctx.save();
+            const isStressed = this.draggedBall.stunnedTimer > 0 || stretchDist > 42;
+            const bandColor = isStressed ? 'rgba(251, 113, 133, 0.78)' : 'rgba(125, 211, 252, 0.55)';
+            const thickness = Math.max(2, 6.5 - Math.min(4.5, stretchDist * 0.03));
+
+            // Target finger ring
+            this.ctx.beginPath();
+            this.ctx.arc(anchorX, anchorY, 8, 0, Math.PI * 2);
+            this.ctx.strokeStyle = bandColor;
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+
+            // Stretched elastic cord
+            this.ctx.beginPath();
+            this.ctx.moveTo(anchorX, anchorY);
+            this.ctx.lineTo(this.draggedBall.x, this.draggedBall.y);
+            this.ctx.strokeStyle = bandColor;
+            this.ctx.lineWidth = thickness;
+            this.ctx.lineCap = 'round';
+            this.ctx.stroke();
+            this.ctx.restore();
+          }
+        }
+
+        // Draw all Balls
+        for (let i = 0; i < this.balls.length; i++) {
+          this.balls[i].draw(this.ctx);
+        }
+
+        // Draw Particles
+        for (let i = 0; i < this.particles.length; i++) {
+          this.particles[i].draw(this.ctx);
+        }
+
+        // Draw Floating Score Indicators
+        for (let i = 0; i < this.floatingTexts.length; i++) {
+          this.floatingTexts[i].draw(this.ctx);
+        }
+
+        this.ctx.restore();
+      }
+    }
+
+    // --- Boot Game on Window Load ---
+    let gameInstance = null;
+    window.onload = function () {
+      gameInstance = new Game();
+
+      function gameLoop(time) {
+        gameInstance.update(time);
+        gameInstance.render();
+        requestAnimationFrame(gameLoop);
+      }
+
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
